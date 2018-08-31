@@ -122,6 +122,7 @@ public abstract class DruidAbstractDataSource extends WrapperAdapter implements 
     protected volatile int                             maxPoolPreparedStatementPerConnectionSize = 10;
 
     protected volatile boolean                         inited                                    = false;
+    protected volatile boolean                         initExceptionThrow                        = true;
 
     protected PrintWriter                              logWriter                                 = new PrintWriter(System.out);
 
@@ -1632,7 +1633,8 @@ public abstract class DruidAbstractDataSource extends WrapperAdapter implements 
 
             validateConnection(conn);
             validatedNanos = System.nanoTime();
-            
+
+            setFailContinuous(false);
             setCreateError(null);
         } catch (SQLException ex) {
             setCreateError(ex);
@@ -2023,6 +2025,20 @@ public abstract class DruidAbstractDataSource extends WrapperAdapter implements 
 
     public boolean isOnFatalError() {
         return onFatalError;
+    }
+
+    /**
+     * @since 1.1.11
+     */
+    public boolean isInitExceptionThrow() {
+        return initExceptionThrow;
+    }
+
+    /**
+     * @since 1.1.11
+     */
+    public void setInitExceptionThrow(boolean initExceptionThrow) {
+        this.initExceptionThrow = initExceptionThrow;
     }
 
     public static class PhysicalConnectionInfo {

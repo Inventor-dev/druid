@@ -496,8 +496,28 @@ public class SQLASTOutputVisitor extends SQLASTVisitorAdapter implements Paramet
             print0(ucase ? " BETWEEN " : " between ");
         }
 
-        printExpr(beginExpr);
-        print0(ucase ? " AND " : " and ");
+        int lines = this.lines;
+        if (beginExpr instanceof SQLBinaryOpExpr) {
+            SQLBinaryOpExpr binaryOpBegin = (SQLBinaryOpExpr) beginExpr;
+            incrementIndent();
+            if (binaryOpBegin.isBracket() || binaryOpBegin.getOperator().isLogical()) {
+                print('(');
+                printExpr(beginExpr);
+                print(')');
+            } else {
+                printExpr(beginExpr);
+            }
+            decrementIndent();
+        } else {
+            printExpr(beginExpr);
+        }
+
+        if (lines != this.lines) {
+            println();
+            print0(ucase ? "AND " : "and ");
+        } else {
+            print0(ucase ? " AND " : " and ");
+        }
 
         printExpr(endExpr);
 
@@ -1540,6 +1560,13 @@ public class SQLASTOutputVisitor extends SQLASTVisitorAdapter implements Paramet
         if (over != null) {
             print(' ');
             over.accept(this);
+        }
+
+        final SQLExpr filter = x.getFilter();
+        if (filter != null) {
+            print0(ucase ? "FILTER (WHERE " : "filter (where ");
+            printExpr(filter);
+            print(')');
         }
 
         this.parameterized = parameterized;
@@ -6556,6 +6583,32 @@ public class SQLASTOutputVisitor extends SQLASTVisitorAdapter implements Paramet
         x.getName().accept(this);
         print0(ucase ? " AS " : " as ");
         x.getOver().accept(this);
+        return false;
+    }
+
+    @Override
+    public boolean visit(SQLDumpStatement x) {
+        List<SQLCommentHint> headHints = x.getHeadHintsDirect();
+        if (headHints != null) {
+            for (SQLCommentHint hint : headHints) {
+                hint.accept(this);
+                println();
+            }
+        }
+
+        print0(ucase ? "DUMP DATA " : "dump data ");
+
+
+        if (x.isOverwrite()) {
+            print0(ucase ? "OVERWRITE " : "overwrite ");
+        }
+
+        SQLExprTableSource into = x.getInto();
+        if (into != null) {
+            into.accept(this);
+        }
+
+        x.getSelect().accept(this);
         return false;
     }
 

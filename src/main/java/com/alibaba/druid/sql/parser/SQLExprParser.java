@@ -696,7 +696,11 @@ public class SQLExprParser extends SQLParser {
                 sqlExpr = unary;
                 break;
             case QUES:
-                lexer.nextToken();
+                if (JdbcConstants.MYSQL.equals(dbType)) {
+                    lexer.nextTokenValue();
+                } else {
+                    lexer.nextToken();
+                }
                 SQLVariantRefExpr quesVarRefExpr = new SQLVariantRefExpr("?");
                 quesVarRefExpr.setIndex(lexer.nextVarIndex());
                 sqlExpr = quesVarRefExpr;
@@ -1441,12 +1445,19 @@ public class SQLExprParser extends SQLParser {
 
         accept(Token.RPAREN);
 
+        if (lexer.identifierEquals(FnvHash.Constants.FILTER)) {
+            filter(aggregateExpr);
+        }
+
         if (lexer.token == Token.OVER) {
             over(aggregateExpr);
-
         }
 
         return aggregateExpr;
+    }
+
+    protected void filter(SQLAggregateExpr aggregateExpr) {
+
     }
 
     protected void over(SQLAggregateExpr aggregateExpr) {
@@ -1488,7 +1499,7 @@ public class SQLExprParser extends SQLParser {
         }
 
         SQLOver.WindowingType windowingType = null;
-        if (lexer.identifierEquals(FnvHash.Constants.ROWS)) {
+        if (lexer.identifierEquals(FnvHash.Constants.ROWS) || lexer.token == Token.ROWS) {
             windowingType = SQLOver.WindowingType.ROWS;
 
         } else if (lexer.identifierEquals(FnvHash.Constants.RANGE)) {
@@ -1515,7 +1526,7 @@ public class SQLExprParser extends SQLParser {
                 accept(Token.AND);
 
                 SQLExpr betweenEnd;
-                if (lexer.identifierEquals(FnvHash.Constants.CURRENT)) {
+                if (lexer.identifierEquals(FnvHash.Constants.CURRENT) || lexer.token == Token.CURRENT) {
                     lexer.nextToken();
                     if (lexer.identifierEquals(FnvHash.Constants.ROW)) {
                         lexer.nextToken();
@@ -2259,6 +2270,8 @@ public class SQLExprParser extends SQLParser {
                     }
 
                     expr = new SQLBinaryOpExpr(expr, SQLBinaryOperator.Equality, rightExp, dbType);
+                } else {
+                    return expr;
                 }
                 break;
             case TILDE:
@@ -2270,6 +2283,8 @@ public class SQLExprParser extends SQLParser {
                     rightExp = relationalRest(rightExp);
 
                     expr = new SQLBinaryOpExpr(expr, SQLBinaryOperator.POSIX_Regular_Match, rightExp, getDbType());
+                } else {
+                    return expr;
                 }
                 break;
             case TILDE_STAR:
@@ -2277,6 +2292,8 @@ public class SQLExprParser extends SQLParser {
                     lexer.nextToken();
                     rightExp = relational();
                     expr = new SQLBinaryOpExpr(expr, SQLBinaryOperator.POSIX_Regular_Match_Insensitive, rightExp, getDbType());
+                } else {
+                    return expr;
                 }
                 break;
             case BANG_TILDE:
@@ -2284,6 +2301,8 @@ public class SQLExprParser extends SQLParser {
                     lexer.nextToken();
                     rightExp = relational();
                     expr = new SQLBinaryOpExpr(expr, SQLBinaryOperator.POSIX_Regular_Not_Match, rightExp, getDbType());
+                } else {
+                    return expr;
                 }
                 break;
             case BANG_TILDE_STAR:
@@ -2291,6 +2310,8 @@ public class SQLExprParser extends SQLParser {
                     lexer.nextToken();
                     rightExp = relational();
                     expr = new SQLBinaryOpExpr(expr, SQLBinaryOperator.POSIX_Regular_Not_Match_POSIX_Regular_Match_Insensitive, rightExp, getDbType());
+                } else {
+                    return expr;
                 }
                 break;
             case TILDE_EQ:
@@ -2298,6 +2319,8 @@ public class SQLExprParser extends SQLParser {
                     lexer.nextToken();
                     rightExp = relational();
                     expr = new SQLBinaryOpExpr(expr, SQLBinaryOperator.SAME_AS, rightExp, getDbType());
+                } else {
+                    return expr;
                 }
                 break;
             case RLIKE:
@@ -2327,6 +2350,8 @@ public class SQLExprParser extends SQLParser {
                     rightExp = relational();
 
                     expr = new SQLBinaryOpExpr(expr, SQLBinaryOperator.SIMILAR_TO, rightExp, getDbType());
+                } else {
+                    return expr;
                 }
                 break;
             default:
@@ -2480,19 +2505,27 @@ public class SQLExprParser extends SQLParser {
         }
 
         SQLName typeExpr = name();
+        final long typeNameHashCode = typeExpr.nameHashCode64();
         String typeName = typeExpr.toString();
-        
-        if ("long".equalsIgnoreCase(typeName) // 
-                && lexer.identifierEquals("byte") //
+
+        if (typeNameHashCode == FnvHash.Constants.LONG
+                && lexer.identifierEquals(FnvHash.Constants.BYTE)
                 && JdbcConstants.MYSQL.equals(getDbType()) //
                 ) {
             typeName += (' ' + lexer.stringVal());
             lexer.nextToken();
-        } else if ("double".equalsIgnoreCase(typeName)
+        } else if (typeNameHashCode == FnvHash.Constants.DOUBLE
                 && JdbcConstants.POSTGRESQL.equals(getDbType()) //
                 ) {
             typeName += (' ' + lexer.stringVal());
             lexer.nextToken();
+        }
+
+        if (typeNameHashCode == FnvHash.Constants.UNSIGNED) {
+            if (lexer.token == Token.IDENTIFIER) {
+                typeName += (' ' + lexer.stringVal());
+                lexer.nextToken();
+            }
         }
 
         if (isCharType(typeName)) {
